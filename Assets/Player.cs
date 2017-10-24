@@ -44,12 +44,12 @@ public class Player : MonoBehaviour {
 
 	Speed walkingSpeed = new Speed{
 		acc = 1.3f,
-		maxV = 2.3f,
+		maxV = 2.5f,
 		fricMul = .83f
 	};
 	Speed dashingSpeed = new Speed{
 		acc = 9000,
-		maxV = 15 * 1f,
+		maxV = 11 * 1f,
 		fricMul = 1
 	};
 	Speed currSpeed;
@@ -57,9 +57,9 @@ public class Player : MonoBehaviour {
 	SwordSwing currSwordSwing = null;
 	float timeHeldAtFull = 0;
 	bool releasedCurrSwordSwing = false;
-	bool releasedCurrSwordSwingDuringWindow = false;
+	SwordSwing dashSwing = null;
 
-	float dashTime = .2f * 1;
+	float dashTime = .3f * 1;
 	float dashButtonHoldTime = .0001f;
 	float dashAmount = 0;
 
@@ -71,6 +71,10 @@ public class Player : MonoBehaviour {
 	void StopDashing(){
 		input.lockMoveButtons = false;
 		dashAmount = 0;
+
+		if(dashSwing){
+			GameObject.Destroy(dashSwing.gameObject);
+		}
 	}
 
 	void Update(){
@@ -83,7 +87,7 @@ public class Player : MonoBehaviour {
 
 		// Move sword around with player while held
 		if(currSwordSwing){
-			currSwordSwing.SetRotation(Mathf.Rad2Deg * facingAngle);
+			currSwordSwing.SetHeldRotation(Mathf.Rad2Deg * facingAngle);
 		}
 
 		// Rotate visual around
@@ -96,11 +100,15 @@ public class Player : MonoBehaviour {
 			
 			if(swordButton == PlayerInput.ButtonState.Press && dashAmount == 0){
 				// Swing sword
-				Quaternion rot = Quaternion.Euler(new Vector3(0, 0, Mathf.Rad2Deg * facingAngle));
-				currSwordSwing = GameObject.Instantiate(swordSwing, transform.position, rot, transform);
+				currSwordSwing = GameObject.Instantiate(swordSwing, transform.position, Quaternion.identity, transform);
+				currSwordSwing.aimAngle = facingAngle * Mathf.Rad2Deg;
+				currSwordSwing.arc = 170;
+				currSwordSwing.swingTime = .18f;
+				currSwordSwing.reverse = false;
+
 				timeHeldAtFull = 0;
 				releasedCurrSwordSwing = false;
-				releasedCurrSwordSwingDuringWindow = false;
+
 			}
 		} else { // Sword out
 
@@ -115,30 +123,15 @@ public class Player : MonoBehaviour {
 			}
 
 			bool couldDash = timeHeldAtFull >= dashButtonHoldTime;
-//			bool almostCouldDash = timeHeldAtFull >= 0.001f; // Holding button at all while swing done is considered a dash
-			bool almostCouldDash = false; // No window
-
-			// Give the player a small window where they can release the button early and still dash
-			//
-			if(releasing && almostCouldDash && !couldDash){
-				releasedCurrSwordSwingDuringWindow = true;
-				input.lockMoveButtons = true;
-			}
 				
-			if(!currSwordSwing.DoneSwinging() || releasedCurrSwordSwingDuringWindow){
+			if(!currSwordSwing.DoneSwinging()){
 				lockFacingAngle = true;
 			}
 
-			if(holding || releasedCurrSwordSwingDuringWindow){ // Holding
+			if(holding){ // Holding
 				
 				if(currSwordSwing.DoneSwinging()){
-					timeHeldAtFull += Time.deltaTime; // TODO issue where can't turn during window?
-
-					// Cancel the artificial wait once dash is possible
-					//
-					if(timeHeldAtFull >= dashButtonHoldTime){
-						releasedCurrSwordSwingDuringWindow = false;
-					}
+					timeHeldAtFull += Time.deltaTime;
 				}
 
 			} else { // Released
@@ -148,6 +141,12 @@ public class Player : MonoBehaviour {
 					input.lockMoveButtons = true;
 					dashAmount = 1;
 					Invoke("StopDashing", dashTime);
+
+					dashSwing = GameObject.Instantiate(swordSwing, transform.position, Quaternion.identity, transform);
+					dashSwing.aimAngle = facingAngle * Mathf.Rad2Deg;
+					dashSwing.arc = 190;
+					dashSwing.swingTime = dashTime - .1f;
+					dashSwing.reverse = true;
 				}
 
 				// Destroy sword when done with the whole swing
@@ -169,11 +168,9 @@ public class Player : MonoBehaviour {
 
 		v *= currSpeed.fricMul;
 
-		v.x += currSpeed.acc * input.xMove;
-		v.y += currSpeed.acc * input.yMove;
+		v += currSpeed.acc * new Vector2(input.xMove, input.yMove).normalized;
 
-		v.x = Mathf.Clamp(v.x, -currSpeed.maxV, currSpeed.maxV);
-		v.y = Mathf.Clamp(v.y, -currSpeed.maxV, currSpeed.maxV);
+		v = Vector2.ClampMagnitude(v, currSpeed.maxV);
 
 		rb2d.velocity = v;
 

@@ -4,22 +4,43 @@ using UnityEngine;
 
 public class SwordSwing : MonoBehaviour {
 
-	const float rv = 1500;
-	const float rd = 170;
-	float r1;
-	float r2;
+	public bool reverse = false;
+
+	public float aimAngle;
+	public float arc = 180;
+	public float swingTime = .5f;
+
+	float r1, r2;
+	float r;
+	float creationTime;
 
 	bool swinging = true;
 
 	void Start () {
-		r1 = transform.rotation.eulerAngles.z;
-		r2 = r1 + rd;
+		creationTime = Time.time;
+
+		r1 = aimAngle - arc/2 + 90;
+		r2 = aimAngle + arc/2 + 90;
+
+		if(reverse){
+			float tmp = r1;
+			r1 = r2;
+			r2 = tmp;
+		}
+		SetRotation(r1);
 	}
 
-	public void SetRotation(float rotInDeg){
+	void SetRotation(float rotInDeg){
+		r = rotInDeg;
+
+		Quaternion rot = Quaternion.Euler(new Vector3(0, 0, r));
+		transform.localRotation = rot;
+	}
+
+	public void SetHeldRotation(float rotInDeg){
 		if(!swinging){
-			Quaternion rot = Quaternion.Euler(new Vector3(0, 0, rd + rotInDeg));
-			transform.localRotation = rot;
+			float offset = reverse ? -arc/2 + 90 : arc/2 + 90;
+			SetRotation(rotInDeg + offset);
 		}
 	}
 
@@ -29,18 +50,16 @@ public class SwordSwing : MonoBehaviour {
 
 	void Update () {
 		if(swinging){
-			if(r1 < r2){
-				r1 += rv * Time.deltaTime;
-			} 
+			
+			float timeAlive = Time.time - creationTime;
+			float lifeFraction = Mathf.Clamp01(timeAlive / swingTime);
 
-			if(r1 > r2){
-				r1 = r2 + 1;
+			if(lifeFraction > .9999f){
 				swinging = false;
 			}
 
-			Vector3 r = gameObject.transform.localRotation.eulerAngles;
-			r.z = r1;
-			gameObject.transform.localRotation = Quaternion.Euler(r);
+			float desiredAngle = Mathf.Lerp(r1, r2, lifeFraction);
+			SetRotation(desiredAngle);
 		}
 	}
 }
